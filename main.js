@@ -4,6 +4,7 @@ const jsonSortify = require("json.sortify");
 const { IotaAnchoringChannel } = require("@tangle-js/anchors");
 
 const CONFIRMATION_ACTION_TYPE = "_sentToIOTA";
+const NODE_ADDRESS;
 
 // @filter(onActionCreated) action.customFields.sendToIOTA=true
 const onActionCreated = (event) =>
@@ -67,16 +68,26 @@ async function sendToIOTA(action, target) {
   // The anchorage to be used to anchor this message (hash)
   let anchorageID;
 
+  // Any Node connection params should be under the options object
+  let options;
+  if (NODE_ADDRESS) {
+    options = {
+      node: NODE_ADDRESS
+    };
+  }
+
   if (channelDetails) {
     const channelID = channelDetails.channelID;
     const seed = channelDetails.seed;
-    channel = await IotaAnchoringChannel.fromID(channelID).bind(seed);
+    channel = await IotaAnchoringChannel.fromID(channelID, options).bind(seed);
 
     anchorageID = channelDetails.nextAnchorageID;
   } else {
-    // A new channel is bound and created
     channelDetails = {};
-    channel = await IotaAnchoringChannel.bindNew();
+
+     // A new channel is bound and created. Node not specified -> Chrysalis mainnet
+    channel = await IotaAnchoringChannel.bindNew(options);
+
     channelDetails.channelID = channel.channelID;
     // This seed will also be used later to anchor more messages to the channel
     channelDetails.seed = channel.seed;
