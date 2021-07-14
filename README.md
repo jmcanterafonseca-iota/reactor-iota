@@ -36,7 +36,7 @@ and the initial anchorage (announce message) provided by the anchoring
 channel associated to the target. The `seed` is the secret used to create such a channel 
 and to anchor action's hashes. Such seed is used to generate an Ed25519 key pair which 
 public key component is stored under the `publicKey` custom field. The public key allows
-to verify the authenticity of the anchored messages. 
+ to verify the authenticity of the anchored messages when fetched. 
 
 Last but not least, the `iotaAnchoringChannel` dictionary contains the `nextAnchorageID`
 member which allows the Reactor script to continue anchoring messages to the same IOTA Streams
@@ -63,7 +63,36 @@ for example:
 The confirmation action created by the script will contain the channelID, as well as a pointer to the original action that triggered the script:
 
 ```json
-
+{
+    "type": "_sentToIOTA",
+    "id": "VasQR7nVxNMmYMUNxYMwpFap",
+    "createdAt": 1626279332221,
+    "customFields": {
+        "channelID": "5f9bf50c1e569935e8dee6885623b218653bec4974336f35bb496799479f6dbe0000000000000000:0e39dbea0bf5ded36b7ae626",
+        "originalAction": {
+            "id": "Vw8Qw7Ha7gNsSfg2MNChAqQe",
+            "type": "_bottleOpened"
+        },
+        "publicKey": "5f9bf50c1e569935e8dee6885623b218653bec4974336f35bb496799479f6dbe"
+    },
+    "timestamp": 1626279332221,
+    "location": {
+        "latitude": 39.0481,
+        "longitude": -77.4728,
+        "position": {
+            "type": "Point",
+            "coordinates": [
+                -77.4728,
+                39.0481
+            ]
+        }
+    },
+    "locationSource": "geoIp",
+    "createdByProject": "Vwrya4hYsEXpPxcxtxGEHrHa",
+    "createdByApp": "VasP3WkKBDTfT9Ertk4abmQb",
+    "thng": "Vw89wM7ntBfq9FVeEy9EYqbm",
+    "product": "VRNr4p4ysF5FBFCHMPRNehnh"
+}
 ```
 
 You can also inspect the anchoring channel content by using the [tangle-cli](https://www.npmjs.com/package/@tangle-js/tangle-cli) tool. For instance, 
