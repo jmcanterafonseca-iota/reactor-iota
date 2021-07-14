@@ -8,11 +8,19 @@
     "IOTA Foundation"
   ],
   "license": "Apache-2.0",
+  "scripts": {
+    "lint": "eslint --max-warnings 0 --ext .js ."
+  },
   "dependencies": {
     "@tangle-js/anchors": "^0.9.1",
     "evrythng-extended": "^4.7.2",
     "hash.js": "^1.1.7",
     "json.sortify": "^2.2.2",
     "reactor-runasync": "^1.1.0"
+  },
+  "devDependencies": {
+    "eslint": "^7.26.0",
+    "eslint-config-airbnb": "^18.2.1",
+    "eslint-config-standard": "^16.0.2"
   }
 }

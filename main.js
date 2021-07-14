@@ -5,7 +5,7 @@ const { IotaAnchoringChannel } = require("@tangle-js/anchors");
 
 const CONFIRMATION_ACTION_TYPE = "_sentToIOTA";
 
-// @filter(onActionCreated) action.customFields.sendToIOTATest=true
+// @filter(onActionCreated) action.customFields.sendToIOTA=true
 const onActionCreated = (event) =>
   runAsync(async () => {
     logger.info(`Sending action ${event.action.id} to IOTA`);
@@ -13,14 +13,15 @@ const onActionCreated = (event) =>
     const action = event.action;
     const { target, targetType } = await readTarget(action);
 
-    logger.info(`Target: ${JSON.stringify(target)}`);
-
+    // First step: record the hash on an anchoring channel (IOTA Stream)
     const channelDetails = await sendToIOTA(action, target);
-    logger.info(`${JSON.stringify(channelDetails)}`);
-
+    
+    // Second step: update the target custom fields with the channel details
     const updatedTarget = await updateTarget(target, targetType, channelDetails);
 
+    // Final step: Send the confirmation action
     const confirmationAction = await createConfirmation(action, updatedTarget, targetType);
+
     logger.info(`Confirmation action: ${confirmationAction.id}`);
   });
 
@@ -68,15 +69,19 @@ async function sendToIOTA(action, target) {
 
   if (channelDetails) {
     const channelID = channelDetails.channelID;
-    const seed = channelDetails.authorSeed;
-    channel = IotaAnchoringChannel.fromID(channelID).bind(seed);
+    const seed = channelDetails.seed;
+    channel = await IotaAnchoringChannel.fromID(channelID).bind(seed);
+
     anchorageID = channelDetails.nextAnchorageID;
   } else {
     // A new channel is bound and created
     channelDetails = {};
     channel = await IotaAnchoringChannel.bindNew();
     channelDetails.channelID = channel.channelID;
+    // This seed will also be used later to anchor more messages to the channel
     channelDetails.seed = channel.seed;
+    // In our case Author Pub Key === Subscriber Pub Key
+    channelDetails.publicKey = channel.subscriberPubKey;
 
     anchorageID = channel.firstAnchorageID;
   }
@@ -86,6 +91,7 @@ async function sendToIOTA(action, target) {
     anchorageID
   );
 
+  // The anchorage that will be used for the next one
   nextAnchorageID = anchoringResult.msgID;
   channelDetails.nextAnchorageID = nextAnchorageID;
 
@@ -106,12 +112,8 @@ async function updateTarget(target, targetType, channelDetails) {
   customFields.iotaAnchoringChannel = channelDetails;
 
   const result = await app[targetType](target.id).update({ customFields });
-  logger.info(`update result: ${JSON.stringify(result)}`);
 
-  // The updated target
-  target.customFields = customFields;
-
-  return target;
+  return result;
 }
 
 /**
@@ -130,10 +132,11 @@ async function createConfirmation(action, target, targetType) {
     customFields: {
       originalAction: {
         type: action.type,
-        id: action.id,
+        id: action.id
       },
-      iotaAnchoringChannel: target.customFields.channelDetails.channelID,
-    },
+      channelID: target.customFields.iotaAnchoringChannel.channelID,
+      publicKey: target.customFields.iotaAnchoringChannel.publicKey
+    }
   };
 
   const newAction = await app.action(CONFIRMATION_ACTION_TYPE).create(payload);
