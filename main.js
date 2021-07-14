@@ -1,123 +1,141 @@
-const { asciiToTrytes } = require('@iota/converter');
-const hashJs = require('hash.js');
-const jsonSortify = require('json.sortify');
-const Mam = require('@iota/mam');
+const runAsync = require("reactor-runasync");
+const hashJs = require("hash.js");
+const jsonSortify = require("json.sortify");
+const { IotaAnchoringChannel } = require("@tangle-js/anchors");
 
-const NODE_ADDRESS = '';
-const DEPTH = 3;
-const MWM = 9;
-const CONFIRMATION_ACTION_TYPE = '_sentToIOTA';
+const CONFIRMATION_ACTION_TYPE = "_sentToIOTA";
 
-let action, target, targetType;
+// @filter(onActionCreated) action.customFields.sendToIOTATest=true
+const onActionCreated = (event) =>
+  runAsync(async () => {
+    logger.info(`Sending action ${event.action.id} to IOTA`);
 
-/**
- * Send the action's SHA 256 hash to IOTA.
- *
- * @returns {Promise} Promise that resolves the message root, and the new MAM state.
- */
-const sendToIOTA = () => {
-  // Hash the action with SHA256
-  const sha256 = hashJs.sha256()
-    .update(jsonSortify(action))
-    .digest('hex');
-  logger.debug(`Action SHA256: ${sha256}`);
+    const action = event.action;
+    const { target, targetType } = await readTarget(action);
 
-  // Use pre-recorded MAM state, else use a new one
-  let mamState = Mam.changeMode(Mam.init(NODE_ADDRESS), 'public');
-  if(target.customFields && target.customFields.iotaMamState) {
-    mamState = target.customFields.iotaMamState;
-  }
+    logger.info(`Target: ${JSON.stringify(target)}`);
 
-  // Encode the payload
-  try {
-    const { root, payload, address } = Mam.create(mamState, asciiToTrytes(sha256));
-    return Mam.attach(payload, address, DEPTH, MWM).then(() => {
-      logger.debug(`root: ${root}`);
-      return { root, mamState };
-    }).catch((e) => {
-      // e is a string
-      throw new Error(e);
-    });
-  } catch (e) {
-    return Promise.reject('Failed to create and/or attach: ' + e.message + ' - ' + e.stack);
-  }
-};
+    const channelDetails = await sendToIOTA(action, target);
+    logger.info(`${JSON.stringify(channelDetails)}`);
 
-/**
- * Update the target with the IOTA MAM root, if it does not exist, and always update the MAM state.
- *
- * @param {object} data - root and mamState from sendToIOTA().
- * @returns {Promise} Promise that resolves once the target is updated.
- */
-const updateTarget = (data) => {
-  if (!target.customFields) {
-    target.customFields = {};
-  }
+    const updatedTarget = await updateTarget(target, targetType, channelDetails);
 
-  const customFields = Object.assign(target.customFields, { iotaMamState: data.mamState });
-  if (!target.customFields.iotaRoot) {
-    customFields.iotaRoot = data.root;
-  }
-
-  return app[targetType](target.id).update({ customFields });
-};
-
-/**
- * Create a confirmation action containing the original action and the IOTA root
- *
- * @returns {Promise} Promise that resolves to the confirmation action.
- */
-const createConfirmation = () => {
-  const payload = {
-    type: CONFIRMATION_ACTION_TYPE,
-    [targetType]: action[targetType],
-    customFields: {
-      originalAction: action,
-      iotaRoot: target.customFields.iotaRoot,
-    },
-  };
-
-  return app.action(CONFIRMATION_ACTION_TYPE)
-    .create(payload)
-    .then(newAction => logger.info(`Confirmation action: ${newAction.id}`));
-};
+    const confirmationAction = await createConfirmation(action, updatedTarget, targetType);
+    logger.info(`Confirmation action: ${confirmationAction.id}`);
+  });
 
 /**
  * Read the complete target object from the action.
  * This is either a Thng, product, or collection.
  *
- * @returns {Promise} A Promise that resolves once the process is complete.
+ * @returns target that contains all data about the target and the target type
  */
-const readTarget = () => {
+async function readTarget(action) {
   if (action.thng) {
-    targetType = 'thng';
+    targetType = "thng";
   } else if (action.product) {
-    targetType = 'product';
+    targetType = "product";
   } else if (action.collection) {
-    targetType = 'collection';
+    targetType = "collection";
   } else {
-    return Promise.reject('No target was specified!');
+    throw new Error("No target was specified!");
   }
 
-  return app[targetType](action[targetType]).read().then((res) => {
-    target = res;
-  });
-};
+  const target = await app[targetType](action[targetType]).read();
 
-// @filter(onActionCreated) action.customFields.sendToIOTA=true
-const onActionCreated = (event) => {
-  logger.info(`Sending action ${event.action.id} to IOTA`);
+  return { target, targetType };
+}
 
-  app.action('all', event.action.id).read()
-    .then((res) => {
-      action = res;
-    })
-    .then(readTarget)
-    .then(sendToIOTA)
-    .then(updateTarget)
-    .then(createConfirmation)
-    .catch(err => logger.error(err.message || err.errors[0]))
-    .then(done);
-};
+/**
+ * Send the action's SHA 256 hash to IOTA.
+ *
+ * @param {object} action The concerned action
+ * @param {object} target The target on which the action is executed
+ *
+ * @returns {object} the channel details
+ */
+async function sendToIOTA(action, target) {
+  // Hash the action with SHA256
+  const sha256 = hashJs.sha256().update(jsonSortify(action)).digest("hex");
+  logger.debug(`Action SHA256: ${sha256}`);
 
-module.exports = { onActionCreated };
+  // We need to check whether a new channel is needed to be created or not
+  let channelDetails =
+    target.customFields && target.customFields.iotaAnchoringChannel;
+  let channel;
+  // The anchorage to be used to anchor this message (hash)
+  let anchorageID;
+
+  if (channelDetails) {
+    const channelID = channelDetails.channelID;
+    const seed = channelDetails.authorSeed;
+    channel = IotaAnchoringChannel.fromID(channelID).bind(seed);
+    anchorageID = channelDetails.nextAnchorageID;
+  } else {
+    // A new channel is bound and created
+    channelDetails = {};
+    channel = await IotaAnchoringChannel.bindNew();
+    channelDetails.channelID = channel.channelID;
+    channelDetails.seed = channel.seed;
+
+    anchorageID = channel.firstAnchorageID;
+  }
+
+  const anchoringResult = await channel.anchor(
+    Buffer.from(sha256),
+    anchorageID
+  );
+
+  nextAnchorageID = anchoringResult.msgID;
+  channelDetails.nextAnchorageID = nextAnchorageID;
+
+  return channelDetails;
+}
+
+/**
+ * Update the target with the channel details
+ *
+ * @param {object} target the item 
+ * @param {string} targetType the type of item (thng, product, etc.)
+ * @param {object} channelDetails - anchoring channel details from sendToIOTA().
+ */
+async function updateTarget(target, targetType, channelDetails) {
+  const customFields = target.customFields || {};
+
+  // We overwrite or assign the channel details
+  customFields.iotaAnchoringChannel = channelDetails;
+
+  const result = await app[targetType](target.id).update({ customFields });
+  logger.info(`update result: ${JSON.stringify(result)}`);
+
+  // The updated target
+  target.customFields = customFields;
+
+  return target;
+}
+
+/**
+ * Create a confirmation action containing the original action
+ *  and the IOTA anchoring channel ID
+ *
+ * @param {object} action The concerned action
+ * @param {object} target The target on which the action was executed
+ * @param {string} targetType the type of item (thng, product, etc.)
+ *
+ */
+async function createConfirmation(action, target, targetType) {
+  const payload = {
+    type: CONFIRMATION_ACTION_TYPE,
+    [targetType]: action[targetType],
+    customFields: {
+      originalAction: {
+        type: action.type,
+        id: action.id,
+      },
+      iotaAnchoringChannel: target.customFields.channelDetails.channelID,
+    },
+  };
+
+  const newAction = await app.action(CONFIRMATION_ACTION_TYPE).create(payload);
+  return newAction;
+}
