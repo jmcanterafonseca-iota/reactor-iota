@@ -1,9 +1,12 @@
-const runAsync = require("reactor-runasync");
-const hashJs = require("hash.js");
-const jsonSortify = require("json.sortify");
-const { IotaAnchoringChannel } = require("@tangle-js/anchors");
+const runAsync = require('reactor-runasync');
+const hashJs = require('hash.js');
+const jsonSortify = require('json.sortify');
+const { IotaAnchoringChannel } = require('@tangle-js/anchors');
 
-const CONFIRMATION_ACTION_TYPE = "_sentToIOTA";
+const logger = global.logger;
+const app = global.app;
+
+const CONFIRMATION_ACTION_TYPE = '_sentToIOTA';
 // Add here your node address. Otherwise the default IF mainnet Nodes will be used
 const NODE_ADDRESS = null;
 
@@ -17,7 +20,7 @@ const onActionCreated = (event) =>
 
     // First step: record the hash on an anchoring channel (IOTA Stream)
     const channelDetails = await sendToIOTA(action, target);
-    
+
     // Second step: update the target custom fields with the channel details
     const updatedTarget = await updateTarget(target, targetType, channelDetails);
 
@@ -33,15 +36,17 @@ const onActionCreated = (event) =>
  *
  * @returns target that contains all data about the target and the target type
  */
-async function readTarget(action) {
+async function readTarget (action) {
+  let targetType;
+
   if (action.thng) {
-    targetType = "thng";
+    targetType = 'thng';
   } else if (action.product) {
-    targetType = "product";
+    targetType = 'product';
   } else if (action.collection) {
-    targetType = "collection";
+    targetType = 'collection';
   } else {
-    throw new Error("No target was specified!");
+    throw new Error('No target was specified!');
   }
 
   const target = await app[targetType](action[targetType]).read();
@@ -57,9 +62,9 @@ async function readTarget(action) {
  *
  * @returns {object} the channel details
  */
-async function sendToIOTA(action, target) {
+async function sendToIOTA (action, target) {
   // Hash the action with SHA256
-  const sha256 = hashJs.sha256().update(jsonSortify(action)).digest("hex");
+  const sha256 = hashJs.sha256().update(jsonSortify(action)).digest('hex');
   logger.debug(`Action SHA256: ${sha256}`);
 
   // We need to check whether a new channel is needed to be created or not
@@ -86,7 +91,7 @@ async function sendToIOTA(action, target) {
   } else {
     channelDetails = {};
 
-     // A new channel is bound and created. Node not specified -> Chrysalis mainnet
+    // A new channel is bound and created. Node not specified -> Chrysalis mainnet
     channel = await IotaAnchoringChannel.bindNew(options);
 
     channelDetails.channelID = channel.channelID;
@@ -104,7 +109,7 @@ async function sendToIOTA(action, target) {
   );
 
   // The anchorage that will be used for the next one
-  nextAnchorageID = anchoringResult.msgID;
+  const nextAnchorageID = anchoringResult.msgID;
   channelDetails.nextAnchorageID = nextAnchorageID;
 
   return channelDetails;
@@ -113,11 +118,11 @@ async function sendToIOTA(action, target) {
 /**
  * Update the target with the channel details
  *
- * @param {object} target the item 
+ * @param {object} target the item
  * @param {string} targetType the type of item (thng, product, etc.)
  * @param {object} channelDetails - anchoring channel details from sendToIOTA().
  */
-async function updateTarget(target, targetType, channelDetails) {
+async function updateTarget (target, targetType, channelDetails) {
   const customFields = target.customFields || {};
 
   // We overwrite or assign the channel details
@@ -137,7 +142,7 @@ async function updateTarget(target, targetType, channelDetails) {
  * @param {string} targetType the type of item (thng, product, etc.)
  *
  */
-async function createConfirmation(action, target, targetType) {
+async function createConfirmation (action, target, targetType) {
   const payload = {
     type: CONFIRMATION_ACTION_TYPE,
     [targetType]: action[targetType],
@@ -154,3 +159,5 @@ async function createConfirmation(action, target, targetType) {
   const newAction = await app.action(CONFIRMATION_ACTION_TYPE).create(payload);
   return newAction;
 }
+
+module.exports = { onActionCreated };
