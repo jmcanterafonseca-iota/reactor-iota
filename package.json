@@ -9,7 +9,7 @@
   ],
   "license": "Apache-2.0",
   "scripts": {
-    "lint": "eslint --max-warnings 0 --ext .js ."
+    "lint": "standard *.js"
   },
   "dependencies": {
     "@tangle-js/anchors": "^0.9.1",
@@ -19,8 +19,6 @@
     "reactor-runasync": "^1.1.0"
   },
   "devDependencies": {
-    "eslint": "^7.26.0",
-    "eslint-config-airbnb": "^18.2.1",
-    "eslint-config-standard": "^16.0.2"
+    "standard": "^16.0.3"
   }
 }

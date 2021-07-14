@@ -4,7 +4,8 @@ const jsonSortify = require("json.sortify");
 const { IotaAnchoringChannel } = require("@tangle-js/anchors");
 
 const CONFIRMATION_ACTION_TYPE = "_sentToIOTA";
-const NODE_ADDRESS;
+// Add here your node address. Otherwise the default IF mainnet Nodes will be used
+const NODE_ADDRESS = null;
 
 // @filter(onActionCreated) action.customFields.sendToIOTA=true
 const onActionCreated = (event) =>

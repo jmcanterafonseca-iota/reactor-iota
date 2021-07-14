@@ -66,9 +66,9 @@ The confirmation action created by the script will contain the channelID, as wel
 
 ```
 
-You can also inspect the anchoring channel content by using the [tangle-cli](https://www.npmjs.com/package/@tangle-js/tangle-cli) tool. 
+You can also inspect the anchoring channel content by using the [tangle-cli](https://www.npmjs.com/package/@tangle-js/tangle-cli) tool. For instance, 
 
 
 ```console
-tcli channel inspect --channelID= --seed= --mainnet
+tcli channel inspect --channelID="0d00913710aa876fadfb7aa3a7c1f99399dea03c442111f82976bf41df9dd0b50000000000000000:99c47f5045a0b27876a68087" --seed=jjfwzxqfmbpqiqrqiyntmdtucqxfgwapzciywutlarkzbixerisfqlxkqsgajvpyofmuktweqltnniup --mainnet
 ```
