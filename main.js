@@ -3,10 +3,12 @@ const hashJs = require('hash.js');
 const jsonSortify = require('json.sortify');
 const { IotaAnchoringChannel } = require('@tangle-js/anchors');
 
+// Global EVRYTHNG objects
 const logger = global.logger;
 const app = global.app;
 
 const CONFIRMATION_ACTION_TYPE = '_sentToIOTA';
+
 // Add here your node address. Otherwise the default IF mainnet Nodes will be used
 const NODE_ADDRESS = null;
 
